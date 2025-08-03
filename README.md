@@ -1,6 +1,8 @@
 # GitHub Action Version Lookup
 
-A Python script that looks up the latest version of GitHub Actions using the GitHub API.
+[![Build and Push Image](https://github.com/managedkaos/get-action-version-number/actions/workflows/publish-image-to-ghcr.yml/badge.svg)](https://github.com/managedkaos/get-action-version-number/actions/workflows/publish-image-to-ghcr.yml)
+
+A Python-based application that looks up the latest version of GitHub Actions using the GitHub API.
 
 ## Features
 
@@ -9,7 +11,6 @@ A Python script that looks up the latest version of GitHub Actions using the Git
 - **NEW**: Extract and process actions directly from GitHub workflow files
 - Support for both authenticated and unauthenticated API requests
 - Handles various action formats (with or without version)
-- Provides clear output showing current vs latest versions
 - **NEW**: JSON output format with `--json` flag
 
 ## Installation
@@ -33,7 +34,7 @@ python main.py "actions/checkout@v4"
 
 Output:
 
-```
+```bash
 actions/checkout@v4.2.2
 ```
 
@@ -63,7 +64,7 @@ python main.py "actions/setup-python"
 
 Output:
 
-```
+```bash
 actions/setup-python@v5.6.0
 ```
 
@@ -103,7 +104,7 @@ python main.py -w workflow.yml
 
 Output:
 
-```
+```bash
 actions/checkout@v4.2.2
 actions/setup-go@v5.5.0
 ```
@@ -173,7 +174,7 @@ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py
 
 Output:
 
-```
+```bash
 actions/checkout@v4.2.2
 actions/setup-python@v5.6.0
 ```
@@ -350,8 +351,7 @@ The script will handle rate limiting gracefully and continue processing.
 ## Dependencies
 
 - `requests>=2.31.0` - For HTTP requests to GitHub API
-- `bios>=0.1.0` - For reading workflow files
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - [see the LICENSE file for details](./LICENSE).
