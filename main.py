@@ -12,11 +12,10 @@ import json
 import os
 import re
 import sys
+import time
 from typing import List, Optional, Tuple
 
 import requests
-import time
-import bios
 
 
 def parse_action_string(action_string: str) -> Tuple[str, Optional[str]]:
@@ -34,11 +33,11 @@ def parse_action_string(action_string: str) -> Tuple[str, Optional[str]]:
     action_string = action_string.strip()
 
     # Remove 'uses:' prefix if present
-    if action_string.startswith('uses:'):
+    if action_string.startswith("uses:"):
         action_string = action_string[5:].strip()
 
     # Pattern to match owner/repo@version or owner/repo
-    pattern = r'^([^@]+)(?:@(.+))?$'
+    pattern = r"^([^@]+)(?:@(.+))?$"
     match = re.match(pattern, action_string)
 
     if not match:
@@ -63,7 +62,7 @@ def get_latest_release(repo: str, github_token: Optional[str] = None) -> Optiona
     """
     headers = {
         "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
+        "X-GitHub-Api-Version": "2022-11-28",
     }
 
     if github_token:
@@ -81,8 +80,13 @@ def get_latest_release(repo: str, github_token: Optional[str] = None) -> Optiona
 
             # Handle rate limiting
             if response.status_code == 429:
-                retry_after = int(response.headers.get('Retry-After', base_delay * (2 ** attempt)))
-                print(f"Rate limited for {repo}. Retrying in {retry_after} seconds...", file=sys.stderr)
+                retry_after = int(
+                    response.headers.get("Retry-After", base_delay * (2**attempt))
+                )
+                print(
+                    f"Rate limited for {repo}. Retrying in {retry_after} seconds...",
+                    file=sys.stderr,
+                )
                 time.sleep(retry_after)
                 continue
 
@@ -100,17 +104,25 @@ def get_latest_release(repo: str, github_token: Optional[str] = None) -> Optiona
                 return None
 
             # Sort by published_at date and get the most recent
-            latest_release = max(published_releases, key=lambda x: x.get("published_at", ""))
+            latest_release = max(
+                published_releases, key=lambda x: x.get("published_at", "")
+            )
 
             return latest_release.get("tag_name")
 
         except requests.exceptions.RequestException as e:
             if attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)
-                print(f"Error fetching releases for {repo} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {delay} seconds...", file=sys.stderr)
+                delay = base_delay * (2**attempt)
+                print(
+                    f"Error fetching releases for {repo} (attempt {attempt + 1}/{max_retries}): {e}. Retrying in {delay} seconds...",
+                    file=sys.stderr,
+                )
                 time.sleep(delay)
             else:
-                print(f"Error fetching releases for {repo} after {max_retries} attempts: {e}", file=sys.stderr)
+                print(
+                    f"Error fetching releases for {repo} after {max_retries} attempts: {e}",
+                    file=sys.stderr,
+                )
                 return None
 
     return None
@@ -140,7 +152,9 @@ def process_action(action_string: str, github_token: Optional[str] = None) -> st
         return f"Error: {e}"
 
 
-def process_action_for_json(action_string: str, github_token: Optional[str] = None) -> Tuple[str, str]:
+def process_action_for_json(
+    action_string: str, github_token: Optional[str] = None
+) -> Tuple[str, str]:
     """
     Process a single action string and return the original action and latest version.
 
@@ -218,7 +232,9 @@ def process_file_json(file_path: str, github_token: Optional[str] = None) -> dic
             for line_num, line in enumerate(file, 1):
                 line = line.strip()
                 if line and not line.startswith("#"):  # Skip empty lines and comments
-                    original_action, latest_version = process_action_for_json(line, github_token)
+                    original_action, latest_version = process_action_for_json(
+                        line, github_token
+                    )
                     results[original_action] = latest_version
     except FileNotFoundError:
         results["error"] = f"File '{file_path}' not found"
@@ -242,12 +258,12 @@ def extract_actions_from_workflow(workflow_file: str) -> List[str]:
 
     try:
         # Read the workflow file as text to use regex
-        with open(workflow_file, 'r', encoding='utf-8') as file:
+        with open(workflow_file, "r", encoding="utf-8") as file:
             content = file.read()
 
         # Pattern to match "uses: owner/repo@version" or "uses: owner/repo"
         # This pattern handles multi-line and single-line uses statements
-        pattern = r'uses:\s*([^@\s]+(?:@[^\s]+)?)'
+        pattern = r"uses:\s*([^@\s]+(?:@[^\s]+)?)"
 
         matches = re.findall(pattern, content)
 
@@ -267,7 +283,9 @@ def extract_actions_from_workflow(workflow_file: str) -> List[str]:
         return []
 
 
-def process_workflow(workflow_file: str, github_token: Optional[str] = None) -> List[str]:
+def process_workflow(
+    workflow_file: str, github_token: Optional[str] = None
+) -> List[str]:
     """
     Process a workflow file and return results for all actions found.
 
@@ -292,7 +310,9 @@ def process_workflow(workflow_file: str, github_token: Optional[str] = None) -> 
     return results
 
 
-def process_workflow_json(workflow_file: str, github_token: Optional[str] = None) -> dict:
+def process_workflow_json(
+    workflow_file: str, github_token: Optional[str] = None
+) -> dict:
     """
     Process a workflow file and return JSON results for all actions found.
 
@@ -317,9 +337,12 @@ def process_workflow_json(workflow_file: str, github_token: Optional[str] = None
     return results
 
 
-def process_stdin(github_token: Optional[str] = None, json_output: bool = False) -> None:
+def process_stdin(
+    github_token: Optional[str] = None, json_output: bool = False
+) -> None:
     """
     Process action strings from stdin.
+    TODO: Need to check the format of each line as its entered before processing.  Malformed lines should _not_ be used for requests.
 
     Args:
         github_token: Optional GitHub token for authenticated requests
@@ -332,7 +355,9 @@ def process_stdin(github_token: Optional[str] = None, json_output: bool = False)
             for line in sys.stdin:
                 line = line.strip()
                 if line:
-                    original_action, latest_version = process_action_for_json(line, github_token)
+                    original_action, latest_version = process_action_for_json(
+                        line, github_token
+                    )
                     results[original_action] = latest_version
             print(json.dumps(results, indent=2))
         else:
@@ -386,14 +411,15 @@ Examples:
     parser.add_argument("-f", "--file", help="File containing one action per line")
 
     parser.add_argument(
-        "-w", "--workflow",
-        help="GitHub workflow file to extract and process actions from"
+        "-w",
+        "--workflow",
+        help="GitHub workflow file to extract and process actions from",
     )
 
     parser.add_argument(
         "--stdin",
         action="store_true",
-        help="Read action strings from stdin (interactive mode)"
+        help="Read action strings from stdin (interactive mode)",
     )
 
     parser.add_argument(
@@ -401,9 +427,7 @@ Examples:
     )
 
     parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output results in JSON format"
+        "--json", action="store_true", help="Output results in JSON format"
     )
 
     args = parser.parse_args()
@@ -412,14 +436,22 @@ Examples:
     github_token = args.token or os.getenv("GITHUB_TOKEN")
 
     # Check for piped input first (before checking for no arguments)
-    if is_input_piped() and not args.action and not args.file and not args.workflow and not args.stdin:
+    if (
+        is_input_piped()
+        and not args.action
+        and not args.file
+        and not args.workflow
+        and not args.stdin
+    ):
         # Automatically process piped input
         if args.json:
             results = {}
             for line in sys.stdin:
                 line = line.strip()
                 if line:
-                    original_action, latest_version = process_action_for_json(line, github_token)
+                    original_action, latest_version = process_action_for_json(
+                        line, github_token
+                    )
                     results[original_action] = latest_version
             print(json.dumps(results, indent=2))
         else:
@@ -457,7 +489,9 @@ Examples:
     elif args.action:
         # Process single action
         if args.json:
-            original_action, latest_version = process_action_for_json(args.action, github_token)
+            original_action, latest_version = process_action_for_json(
+                args.action, github_token
+            )
             result = {original_action: latest_version}
             print(json.dumps(result, indent=2))
         else:

@@ -6,13 +6,14 @@ This script demonstrates various ways to use the main script.
 """
 
 import subprocess
-import sys
 
 
 def run_command(cmd):
     """Run a command and return the output."""
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, shell=True, capture_output=True, text=True, check=True
+        )
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
         print(f"Error running command: {e}")
@@ -51,7 +52,7 @@ def main():
     result = run_command("python3 main.py -f actions.txt | head -5")
     if result:
         print("Output (first 5 lines):")
-        for line in result.split('\n'):
+        for line in result.split("\n"):
             print(f"  {line}")
 
     # Example 5: Show help
@@ -60,7 +61,7 @@ def main():
     result = run_command("python3 main.py --help")
     if result:
         print("Help output:")
-        for line in result.split('\n')[:10]:  # Show first 10 lines
+        for line in result.split("\n")[:10]:  # Show first 10 lines
             print(f"  {line}")
         print("  ...")
 

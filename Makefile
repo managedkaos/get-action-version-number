@@ -40,7 +40,7 @@ x_pre-commit-clean:
 	pre-commit uninstall
 
 lint:
-	flake8 --ignore=E501,E231 *.py
+	flake8 --ignore=E501,E231,W503 *.py
 	pylint --errors-only --disable=C0301 *.py
 	black --diff *.py
 	isort --check-only --diff *.py
