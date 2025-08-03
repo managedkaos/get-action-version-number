@@ -9,6 +9,7 @@ A Python script that looks up the latest version of GitHub Actions using the Git
 - Support for both authenticated and unauthenticated API requests
 - Handles various action formats (with or without version)
 - Provides clear output showing current vs latest versions
+- **NEW**: JSON output format with `--json` flag
 
 ## Installation
 
@@ -32,7 +33,23 @@ python main.py "actions/checkout@v4"
 Output:
 
 ```
-actions/checkout@v4 -> actions/checkout@v4
+actions/checkout@v4.2.2
+```
+
+### Single Action with JSON Output
+
+Get JSON format with action as key and latest version as value:
+
+```bash
+python main.py "actions/checkout@v4" --json
+```
+
+Output:
+
+```json
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2"
+}
 ```
 
 ### Action without Version
@@ -46,7 +63,7 @@ python main.py "actions/setup-python"
 Output:
 
 ```
-actions/setup-python -> actions/setup-python@v5
+actions/setup-python@v5.6.0
 ```
 
 ### Process File
@@ -55,6 +72,24 @@ Process multiple actions from a file (one per line):
 
 ```bash
 python main.py -f actions.txt
+```
+
+### Process File with JSON Output
+
+Get JSON format for file processing:
+
+```bash
+python main.py -f actions.txt --json
+```
+
+Output:
+
+```json
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-python@v5": "actions/setup-python@v5.6.0",
+  "docker/build-push-action@v5": "docker/build-push-action@v6.18.0"
+}
 ```
 
 ### Authenticated Requests
@@ -68,6 +103,9 @@ python main.py "actions/checkout@v4" --token YOUR_GITHUB_TOKEN
 # Using environment variable
 export GITHUB_TOKEN=your_token_here
 python main.py "actions/checkout@v4"
+
+# With JSON output
+python main.py "actions/checkout@v4" --json --token YOUR_GITHUB_TOKEN
 ```
 
 ### Interactive Mode
@@ -80,20 +118,41 @@ python main.py
 
 Then enter action strings one per line (Ctrl+D to finish).
 
+For JSON output in interactive mode:
+
+```bash
+python main.py --json
+```
+
 ## Input Format
 
 The script accepts action strings in these formats:
 
 - `owner/repo@version` (e.g., `actions/checkout@v4`)
 - `owner/repo` (e.g., `actions/setup-python`)
+- `uses: owner/repo@version` (handles GitHub workflow format)
 
 ## Output Format
 
+### Standard Output
+
 The script outputs results in these formats:
 
-- `owner/repo@current -> owner/repo@latest` (when current version is specified)
-- `owner/repo -> owner/repo@latest` (when no version is specified)
-- `owner/repo@current -> No releases found` (when no releases are found)
+- `owner/repo@latest` (latest version found)
+- `No releases found` (when no releases are found)
+- `Error: message` (when parsing fails)
+
+### JSON Output
+
+With the `--json` flag, the script outputs:
+
+```json
+{
+  "original_action": "latest_version",
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-python": "actions/setup-python@v5.6.0"
+}
+```
 
 ## File Processing
 
@@ -101,8 +160,16 @@ When processing a file, the script:
 
 - Skips empty lines
 - Skips lines starting with `#` (comments)
-- Shows line numbers for each result
 - Continues processing even if some actions fail
+- Supports both standard and JSON output formats
+
+## Command Line Options
+
+- `action`: Action string in format 'owner/repo@version' or 'owner/repo'
+- `-f, --file`: File containing one action per line
+- `--token`: GitHub token for authenticated requests (optional)
+- `--json`: Output results in JSON format
+- `-h, --help`: Show help message
 
 ## Error Handling
 
@@ -120,16 +187,28 @@ The script handles various error conditions:
 
 ```bash
 $ python main.py "actions/checkout@v4"
-actions/checkout@v4 -> actions/checkout@v4
+actions/checkout@v4.2.2
+
+$ python main.py "actions/checkout@v4" --json
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2"
+}
 ```
 
 ### Example 2: File Processing
 
 ```bash
 $ python main.py -f actions.txt
-Line 1: actions/checkout@v4 -> actions/checkout@v4
-Line 2: actions/setup-python -> actions/setup-python@v5
-Line 3: docker/build-push-action@v5 -> docker/build-push-action@v6
+actions/checkout@v4.2.2
+actions/setup-python@v5.6.0
+docker/build-push-action@v6.18.0
+
+$ python main.py -f actions.txt --json
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-python@v5": "actions/setup-python@v5.6.0",
+  "docker/build-push-action@v5": "docker/build-push-action@v6.18.0"
+}
 ```
 
 ### Example 3: Interactive Mode
@@ -139,8 +218,17 @@ $ python main.py
 Enter action strings (one per line, Ctrl+D to finish):
 actions/checkout@v4
 actions/setup-python
-actions/checkout@v4 -> actions/checkout@v4
-actions/setup-python -> actions/setup-python@v5
+actions/checkout@v4.2.2
+actions/setup-python@v5.6.0
+
+$ python main.py --json
+Enter action strings (one per line, Ctrl+D to finish):
+actions/checkout@v4
+actions/setup-python
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-python": "actions/setup-python@v5.6.0"
+}
 ```
 
 ## GitHub Token

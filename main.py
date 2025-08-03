@@ -8,6 +8,7 @@ using the GitHub API.
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -123,22 +124,50 @@ def process_action(action_string: str, github_token: Optional[str] = None) -> st
         github_token: Optional GitHub token for authenticated requests
 
     Returns:
-        Formatted string with the action and its latest version
+        Latest version string or error message
     """
     try:
         repo, current_version = parse_action_string(action_string)
         latest_version = get_latest_release(repo, github_token)
 
         if latest_version:
-            if current_version:
-                return f"{repo}@{current_version} -> {repo}@{latest_version}"
-            else:
-                return f"{repo} -> {repo}@{latest_version}"
+            return f"{repo}@{latest_version}"
         else:
-            return f"{repo}@{current_version} -> No releases found"
+            return "No releases found"
 
     except ValueError as e:
         return f"Error: {e}"
+
+
+def process_action_for_json(action_string: str, github_token: Optional[str] = None) -> Tuple[str, str]:
+    """
+    Process a single action string and return the original action and latest version.
+
+    Args:
+        action_string: Action string to process
+        github_token: Optional GitHub token for authenticated requests
+
+    Returns:
+        Tuple of (original_action, latest_version)
+    """
+    try:
+        repo, current_version = parse_action_string(action_string)
+        latest_version = get_latest_release(repo, github_token)
+
+        # Reconstruct the original action string
+        original_action = action_string.strip()
+        if current_version:
+            original_action = f"{repo}@{current_version}"
+        else:
+            original_action = repo
+
+        if latest_version:
+            return original_action, f"{repo}@{latest_version}"
+        else:
+            return original_action, "No releases found"
+
+    except ValueError as e:
+        return action_string.strip(), f"Error: {e}"
 
 
 def process_file(file_path: str, github_token: Optional[str] = None) -> List[str]:
@@ -170,6 +199,34 @@ def process_file(file_path: str, github_token: Optional[str] = None) -> List[str
     return results
 
 
+def process_file_json(file_path: str, github_token: Optional[str] = None) -> dict:
+    """
+    Process a file containing one action per line and return JSON format.
+
+    Args:
+        file_path: Path to the file containing actions
+        github_token: Optional GitHub token for authenticated requests
+
+    Returns:
+        Dictionary with action as key and latest version as value
+    """
+    results = {}
+
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            for line_num, line in enumerate(file, 1):
+                line = line.strip()
+                if line and not line.startswith("#"):  # Skip empty lines and comments
+                    original_action, latest_version = process_action_for_json(line, github_token)
+                    results[original_action] = latest_version
+    except FileNotFoundError:
+        results["error"] = f"File '{file_path}' not found"
+    except Exception as e:
+        results["error"] = f"Error reading file: {e}"
+
+    return results
+
+
 def main():
     """Main function to handle command line arguments and execute the script."""
     parser = argparse.ArgumentParser(
@@ -180,6 +237,7 @@ Examples:
   %(prog)s "actions/checkout@v4"
   %(prog)s "actions/setup-python"
   %(prog)s -f actions.txt
+  %(prog)s -f actions.txt --json
   %(prog)s -f actions.txt --token YOUR_GITHUB_TOKEN
         """,
     )
@@ -196,6 +254,12 @@ Examples:
         "--token", help="GitHub token for authenticated requests (optional)"
     )
 
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output results in JSON format"
+    )
+
     args = parser.parse_args()
 
     # Get GitHub token from environment variable if not provided
@@ -203,20 +267,38 @@ Examples:
 
     if args.file:
         # Process file
-        results = process_file(args.file, github_token)
+        if args.json:
+            results = process_file_json(args.file, github_token)
+            print(json.dumps(results, indent=2))
+        else:
+            results = process_file(args.file, github_token)
     elif args.action:
         # Process single action
-        result = process_action(args.action, github_token)
-        print(result)
+        if args.json:
+            original_action, latest_version = process_action_for_json(args.action, github_token)
+            result = {original_action: latest_version}
+            print(json.dumps(result, indent=2))
+        else:
+            result = process_action(args.action, github_token)
+            print(result)
     else:
         # If no arguments provided, read from stdin
         print("Enter action strings (one per line, Ctrl+D to finish):")
         try:
-            for line in sys.stdin:
-                line = line.strip()
-                if line:
-                    result = process_action(line, github_token)
-                    print(result)
+            if args.json:
+                results = {}
+                for line in sys.stdin:
+                    line = line.strip()
+                    if line:
+                        original_action, latest_version = process_action_for_json(line, github_token)
+                        results[original_action] = latest_version
+                print(json.dumps(results, indent=2))
+            else:
+                for line in sys.stdin:
+                    line = line.strip()
+                    if line:
+                        result = process_action(line, github_token)
+                        print(result)
         except KeyboardInterrupt:
             print("\nExiting...")
             sys.exit(1)
