@@ -346,6 +346,16 @@ def process_stdin(github_token: Optional[str] = None, json_output: bool = False)
         sys.exit(1)
 
 
+def is_input_piped() -> bool:
+    """
+    Check if input is coming from a pipe (not a terminal).
+
+    Returns:
+        True if input is piped, False if it's from a terminal
+    """
+    return not sys.stdin.isatty()
+
+
 def main():
     """Main function to handle command line arguments and execute the script."""
     parser = argparse.ArgumentParser(
@@ -362,6 +372,8 @@ Examples:
   %(prog)s -w workflow.yml --token YOUR_GITHUB_TOKEN
   %(prog)s --stdin
   %(prog)s --stdin --json
+  echo "actions/checkout@v4" | %(prog)s
+  echo "actions/checkout@v4" | %(prog)s --json
         """,
     )
 
@@ -381,7 +393,7 @@ Examples:
     parser.add_argument(
         "--stdin",
         action="store_true",
-        help="Read action strings from stdin"
+        help="Read action strings from stdin (interactive mode)"
     )
 
     parser.add_argument(
@@ -396,13 +408,32 @@ Examples:
 
     args = parser.parse_args()
 
+    # Get GitHub token from environment variable if not provided
+    github_token = args.token or os.getenv("GITHUB_TOKEN")
+
+    # Check for piped input first (before checking for no arguments)
+    if is_input_piped() and not args.action and not args.file and not args.workflow and not args.stdin:
+        # Automatically process piped input
+        if args.json:
+            results = {}
+            for line in sys.stdin:
+                line = line.strip()
+                if line:
+                    original_action, latest_version = process_action_for_json(line, github_token)
+                    results[original_action] = latest_version
+            print(json.dumps(results, indent=2))
+        else:
+            for line in sys.stdin:
+                line = line.strip()
+                if line:
+                    result = process_action(line, github_token)
+                    print(result)
+        return
+
     # If no arguments provided, show help
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
-
-    # Get GitHub token from environment variable if not provided
-    github_token = args.token or os.getenv("GITHUB_TOKEN")
 
     if args.workflow:
         # Process workflow file
@@ -421,7 +452,7 @@ Examples:
         else:
             results = process_file(args.file, github_token)
     elif args.stdin:
-        # Process stdin
+        # Process stdin (interactive mode)
         process_stdin(github_token, args.json)
     elif args.action:
         # Process single action

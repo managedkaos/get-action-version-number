@@ -165,10 +165,10 @@ python main.py --stdin --json
 
 ### Piping Input
 
-You can also pipe action strings to the script:
+You can pipe action strings to the script without any flags - it will automatically detect piped input:
 
 ```bash
-echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin
+echo -e "actions/checkout@v4\nactions/setup-python" | python main.py
 ```
 
 Output:
@@ -181,7 +181,7 @@ actions/setup-python@v5.6.0
 With JSON output:
 
 ```bash
-echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin --json
+echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --json
 ```
 
 Output:
@@ -192,6 +192,8 @@ Output:
   "actions/setup-python": "actions/setup-python@v5.6.0"
 }
 ```
+
+**Note**: The `--stdin` flag is only needed for interactive mode (typing at the terminal). Piped input is automatically detected.
 
 ## Input Format
 
@@ -237,7 +239,7 @@ When processing a file, the script:
 - `action`: Action string in format 'owner/repo@version' or 'owner/repo'
 - `-f, --file`: File containing one action per line
 - `-w, --workflow`: GitHub workflow file to extract and process actions from
-- `--stdin`: Read action strings from stdin
+- `--stdin`: Read action strings from stdin (interactive mode only)
 - `--token`: GitHub token for authenticated requests (optional)
 - `--json`: Output results in JSON format
 - `-h, --help`: Show help message
@@ -319,11 +321,11 @@ actions/setup-python
 ### Example 5: Piping Input
 
 ```bash
-$ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin
+$ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py
 actions/checkout@v4.2.2
 actions/setup-python@v5.6.0
 
-$ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin --json
+$ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --json
 {
   "actions/checkout@v4": "actions/checkout@v4.2.2",
   "actions/setup-python": "actions/setup-python@v5.6.0"
