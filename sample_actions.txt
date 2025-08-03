@@ -1,0 +1,16 @@
+# Sample GitHub Actions for testing
+# Lines starting with # are comments and will be ignored
+
+uses: actions/checkout@v4
+uses: actions/setup-python@v5
+uses: docker/build-push-action@v5
+
+# Actions without `uses:` but with a version
+actions/checkout@v4
+actions/setup-python@v5
+docker/build-push-action@v5
+
+# Actions without `uses:` or version
+actions/checkout
+actions/setup-python
+docker/build-push-action
