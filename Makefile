@@ -17,10 +17,11 @@ help:
 	@echo "  black                    - format code with black"
 	@echo "  isort                    - sort imports with isort"
 	@echo "  test                     - run unit tests"
+	@echo "  test-docker              - run Docker container tests"
 	@echo "  build                    - build docker container"
 	@echo "  clean                    - clean up workspace and containers"
 
-all: requirements lint test build
+all: requirements lint test build test-docker
 
 development-requirements: requirements
 	pip install --quiet --upgrade --requirement development-requirements.txt
@@ -56,6 +57,9 @@ isort:
 test:
 	python -m unittest --verbose --failfast
 
+test-docker: build
+	./test_docker.sh
+
 build: lint test
 	docker build --tag $(APP):$(TAG) .
 
@@ -64,5 +68,6 @@ clean:
 	docker container rm $(APP) || true
 	@rm -rf ./__pycache__ ./tests/__pycache__ .ruff_cache
 	@rm -f .*~ *.pyc
+	@rm -f bandit-report.json
 
-.PHONY: help requirements lint black isort test build clean development-requirements pre-commit-install pre-commit-run pre-commit-clean
+.PHONY: help requirements lint black isort test docker-test build clean development-requirements pre-commit-install pre-commit-run pre-commit-clean
