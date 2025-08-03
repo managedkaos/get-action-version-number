@@ -16,6 +16,7 @@ from typing import List, Optional, Tuple
 
 import requests
 import time
+import bios
 
 
 def parse_action_string(action_string: str) -> Tuple[str, Optional[str]]:
@@ -227,6 +228,124 @@ def process_file_json(file_path: str, github_token: Optional[str] = None) -> dic
     return results
 
 
+def extract_actions_from_workflow(workflow_file: str) -> List[str]:
+    """
+    Extract action strings from a GitHub workflow file.
+
+    Args:
+        workflow_file: Path to the workflow file
+
+    Returns:
+        List of action strings found in the workflow
+    """
+    actions = []
+
+    try:
+        # Read the workflow file as text to use regex
+        with open(workflow_file, 'r', encoding='utf-8') as file:
+            content = file.read()
+
+        # Pattern to match "uses: owner/repo@version" or "uses: owner/repo"
+        # This pattern handles multi-line and single-line uses statements
+        pattern = r'uses:\s*([^@\s]+(?:@[^\s]+)?)'
+
+        matches = re.findall(pattern, content)
+
+        for match in matches:
+            # Clean up the match and add "uses:" prefix back
+            action = match.strip()
+            if action:
+                actions.append(f"uses: {action}")
+
+        return actions
+
+    except FileNotFoundError:
+        print(f"Error: Workflow file '{workflow_file}' not found", file=sys.stderr)
+        return []
+    except Exception as e:
+        print(f"Error reading workflow file: {e}", file=sys.stderr)
+        return []
+
+
+def process_workflow(workflow_file: str, github_token: Optional[str] = None) -> List[str]:
+    """
+    Process a workflow file and return results for all actions found.
+
+    Args:
+        workflow_file: Path to the workflow file
+        github_token: Optional GitHub token for authenticated requests
+
+    Returns:
+        List of formatted results
+    """
+    actions = extract_actions_from_workflow(workflow_file)
+    results = []
+
+    if not actions:
+        results.append("No actions found in workflow file")
+        return results
+
+    for action in actions:
+        result = process_action(action, github_token)
+        results.append(result)
+
+    return results
+
+
+def process_workflow_json(workflow_file: str, github_token: Optional[str] = None) -> dict:
+    """
+    Process a workflow file and return JSON results for all actions found.
+
+    Args:
+        workflow_file: Path to the workflow file
+        github_token: Optional GitHub token for authenticated requests
+
+    Returns:
+        Dictionary with action as key and latest version as value
+    """
+    actions = extract_actions_from_workflow(workflow_file)
+    results = {}
+
+    if not actions:
+        results["error"] = "No actions found in workflow file"
+        return results
+
+    for action in actions:
+        original_action, latest_version = process_action_for_json(action, github_token)
+        results[original_action] = latest_version
+
+    return results
+
+
+def process_stdin(github_token: Optional[str] = None, json_output: bool = False) -> None:
+    """
+    Process action strings from stdin.
+
+    Args:
+        github_token: Optional GitHub token for authenticated requests
+        json_output: Whether to output in JSON format
+    """
+    print("Enter action strings (one per line, Ctrl+D to finish):")
+    try:
+        if json_output:
+            results = {}
+            for line in sys.stdin:
+                line = line.strip()
+                if line:
+                    original_action, latest_version = process_action_for_json(line, github_token)
+                    results[original_action] = latest_version
+            print(json.dumps(results, indent=2))
+        else:
+            for line in sys.stdin:
+                line = line.strip()
+                if line:
+                    result = process_action(line, github_token)
+                    print(result)
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        sys.exit(1)
+
+
 def main():
     """Main function to handle command line arguments and execute the script."""
     parser = argparse.ArgumentParser(
@@ -238,7 +357,11 @@ Examples:
   %(prog)s "actions/setup-python"
   %(prog)s -f actions.txt
   %(prog)s -f actions.txt --json
-  %(prog)s -f actions.txt --token YOUR_GITHUB_TOKEN
+  %(prog)s -w workflow.yml
+  %(prog)s -w workflow.yml --json
+  %(prog)s -w workflow.yml --token YOUR_GITHUB_TOKEN
+  %(prog)s --stdin
+  %(prog)s --stdin --json
         """,
     )
 
@@ -249,6 +372,17 @@ Examples:
     )
 
     parser.add_argument("-f", "--file", help="File containing one action per line")
+
+    parser.add_argument(
+        "-w", "--workflow",
+        help="GitHub workflow file to extract and process actions from"
+    )
+
+    parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read action strings from stdin"
+    )
 
     parser.add_argument(
         "--token", help="GitHub token for authenticated requests (optional)"
@@ -262,16 +396,33 @@ Examples:
 
     args = parser.parse_args()
 
+    # If no arguments provided, show help
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
+
     # Get GitHub token from environment variable if not provided
     github_token = args.token or os.getenv("GITHUB_TOKEN")
 
-    if args.file:
+    if args.workflow:
+        # Process workflow file
+        if args.json:
+            results = process_workflow_json(args.workflow, github_token)
+            print(json.dumps(results, indent=2))
+        else:
+            results = process_workflow(args.workflow, github_token)
+            for result in results:
+                print(result)
+    elif args.file:
         # Process file
         if args.json:
             results = process_file_json(args.file, github_token)
             print(json.dumps(results, indent=2))
         else:
             results = process_file(args.file, github_token)
+    elif args.stdin:
+        # Process stdin
+        process_stdin(github_token, args.json)
     elif args.action:
         # Process single action
         if args.json:
@@ -282,26 +433,9 @@ Examples:
             result = process_action(args.action, github_token)
             print(result)
     else:
-        # If no arguments provided, read from stdin
-        print("Enter action strings (one per line, Ctrl+D to finish):")
-        try:
-            if args.json:
-                results = {}
-                for line in sys.stdin:
-                    line = line.strip()
-                    if line:
-                        original_action, latest_version = process_action_for_json(line, github_token)
-                        results[original_action] = latest_version
-                print(json.dumps(results, indent=2))
-            else:
-                for line in sys.stdin:
-                    line = line.strip()
-                    if line:
-                        result = process_action(line, github_token)
-                        print(result)
-        except KeyboardInterrupt:
-            print("\nExiting...")
-            sys.exit(1)
+        # If no specific input method provided, show help
+        parser.print_help()
+        sys.exit(0)
 
 
 if __name__ == "__main__":

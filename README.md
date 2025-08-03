@@ -6,6 +6,7 @@ A Python script that looks up the latest version of GitHub Actions using the Git
 
 - Look up the latest version of a single GitHub Action
 - Process multiple actions from a file
+- **NEW**: Extract and process actions directly from GitHub workflow files
 - Support for both authenticated and unauthenticated API requests
 - Handles various action formats (with or without version)
 - Provides clear output showing current vs latest versions
@@ -92,6 +93,38 @@ Output:
 }
 ```
 
+### Process Workflow File
+
+Extract and process actions directly from a GitHub workflow file:
+
+```bash
+python main.py -w workflow.yml
+```
+
+Output:
+
+```
+actions/checkout@v4.2.2
+actions/setup-go@v5.5.0
+```
+
+### Process Workflow File with JSON Output
+
+Get JSON format for workflow processing:
+
+```bash
+python main.py -w workflow.yml --json
+```
+
+Output:
+
+```json
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-go@v5.5.0": "actions/setup-go@v5.5.0"
+}
+```
+
 ### Authenticated Requests
 
 For better rate limits and access to private repositories, use a GitHub token:
@@ -106,22 +139,58 @@ python main.py "actions/checkout@v4"
 
 # With JSON output
 python main.py "actions/checkout@v4" --json --token YOUR_GITHUB_TOKEN
+
+# With workflow file
+python main.py -w workflow.yml --token YOUR_GITHUB_TOKEN
+
+# With workflow file and JSON output
+python main.py -w workflow.yml --json --token YOUR_GITHUB_TOKEN
 ```
 
 ### Interactive Mode
 
-Run without arguments to enter interactive mode:
+Run with `--stdin` flag to read from stdin:
 
 ```bash
-python main.py
+python main.py --stdin
 ```
 
 Then enter action strings one per line (Ctrl+D to finish).
 
-For JSON output in interactive mode:
+For JSON output in stdin mode:
 
 ```bash
-python main.py --json
+python main.py --stdin --json
+```
+
+### Piping Input
+
+You can also pipe action strings to the script:
+
+```bash
+echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin
+```
+
+Output:
+
+```
+actions/checkout@v4.2.2
+actions/setup-python@v5.6.0
+```
+
+With JSON output:
+
+```bash
+echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin --json
+```
+
+Output:
+
+```json
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-python": "actions/setup-python@v5.6.0"
+}
 ```
 
 ## Input Format
@@ -167,6 +236,8 @@ When processing a file, the script:
 
 - `action`: Action string in format 'owner/repo@version' or 'owner/repo'
 - `-f, --file`: File containing one action per line
+- `-w, --workflow`: GitHub workflow file to extract and process actions from
+- `--stdin`: Read action strings from stdin
 - `--token`: GitHub token for authenticated requests (optional)
 - `--json`: Output results in JSON format
 - `-h, --help`: Show help message
@@ -211,20 +282,48 @@ $ python main.py -f actions.txt --json
 }
 ```
 
-### Example 3: Interactive Mode
+### Example 3: Workflow File Processing
 
 ```bash
-$ python main.py
+$ python main.py -w workflow.yml
+actions/checkout@v4.2.2
+actions/setup-go@v5.5.0
+
+$ python main.py -w workflow.yml --json
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-go@v5.5.0": "actions/setup-go@v5.5.0"
+}
+```
+
+### Example 4: Interactive Mode
+
+```bash
+$ python main.py --stdin
 Enter action strings (one per line, Ctrl+D to finish):
 actions/checkout@v4
 actions/setup-python
 actions/checkout@v4.2.2
 actions/setup-python@v5.6.0
 
-$ python main.py --json
+$ python main.py --stdin --json
 Enter action strings (one per line, Ctrl+D to finish):
 actions/checkout@v4
 actions/setup-python
+{
+  "actions/checkout@v4": "actions/checkout@v4.2.2",
+  "actions/setup-python": "actions/setup-python@v5.6.0"
+}
+```
+
+### Example 5: Piping Input
+
+```bash
+$ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin
+actions/checkout@v4.2.2
+actions/setup-python@v5.6.0
+
+$ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --stdin --json
 {
   "actions/checkout@v4": "actions/checkout@v4.2.2",
   "actions/setup-python": "actions/setup-python@v5.6.0"
@@ -249,6 +348,7 @@ The script will handle rate limiting gracefully and continue processing.
 ## Dependencies
 
 - `requests>=2.31.0` - For HTTP requests to GitHub API
+- `bios>=0.1.0` - For reading workflow files
 
 ## License
 
