@@ -12,6 +12,7 @@ from main import (
     extract_actions_from_workflow,
     get_latest_release,
     is_input_piped,
+    is_local_workflow_reference,
     parse_action_string,
     process_action,
     process_action_for_json,
@@ -21,6 +22,34 @@ from main import (
     process_workflow,
     process_workflow_json,
 )
+
+
+class TestIsLocalWorkflowReference(unittest.TestCase):
+    """Test the is_local_workflow_reference function"""
+
+    def test_local_workflow_reference_with_dot_slash(self):
+        """Test local workflow reference starting with ./"""
+        self.assertTrue(
+            is_local_workflow_reference("./.github/workflows/integrate-python-app.yml")
+        )
+
+    def test_local_workflow_reference_with_dot_dot_slash(self):
+        """Test local workflow reference starting with ../"""
+        self.assertTrue(is_local_workflow_reference("../workflows/deploy.yml"))
+
+    def test_github_action_not_local(self):
+        """Test that GitHub actions are not identified as local"""
+        self.assertFalse(is_local_workflow_reference("actions/checkout@v4"))
+        self.assertFalse(is_local_workflow_reference("actions/setup-python"))
+        self.assertFalse(is_local_workflow_reference("docker/build-push-action@v5"))
+
+    def test_empty_string(self):
+        """Test empty string"""
+        self.assertFalse(is_local_workflow_reference(""))
+
+    def test_whitespace_only(self):
+        """Test whitespace only string"""
+        self.assertFalse(is_local_workflow_reference("   "))
 
 
 class TestParseActionString(unittest.TestCase):
@@ -67,6 +96,22 @@ class TestParseActionString(unittest.TestCase):
         action = "@invalid"
         with self.assertRaises(ValueError):
             parse_action_string(action)
+
+    def test_local_workflow_reference_raises_error(self):
+        """Test that local workflow references raise ValueError"""
+        local_refs = [
+            "./.github/workflows/integrate-python-app.yml",
+            "../workflows/deploy.yml",
+            "uses: ./.github/workflows/local-workflow.yml",
+            "uses: ../workflows/another-workflow.yml",
+        ]
+
+        for local_ref in local_refs:
+            with self.assertRaises(ValueError) as context:
+                parse_action_string(local_ref)
+            self.assertIn(
+                "Local workflow reference not supported", str(context.exception)
+            )
 
     def test_invalid_action_returns_no_releases(self):
         """Test that invalid actions return 'No releases found'"""
@@ -350,6 +395,123 @@ jobs:
             self.assertIn("uses: actions/checkout", actions)
             self.assertIn("uses: actions/setup-python", actions)
 
+    def test_filter_local_workflow_references(self):
+        """Test that local workflow references are filtered out"""
+        workflow_content = """
+name: Test Workflow
+on: [push]
+
+jobs:
+  integration:
+    uses: ./.github/workflows/integrate-python-app.yml
+    permissions:
+      contents: read
+
+  delivery:
+    uses: ./.github/workflows/deliver-container-image.yml
+    permissions:
+      contents: read
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+
+      - name: Deploy
+        uses: ../workflows/deploy-aws-app-runner.yml
+"""
+
+        with patch("builtins.open", mock_open(read_data=workflow_content)):
+            actions = extract_actions_from_workflow("workflow.yml")
+            # Should only extract GitHub actions, not local workflow references
+            self.assertEqual(len(actions), 2)
+            self.assertIn("uses: actions/checkout@v4", actions)
+            self.assertIn("uses: actions/setup-python@v5", actions)
+
+            # Verify local workflow references are NOT included
+            self.assertNotIn(
+                "uses: ./.github/workflows/integrate-python-app.yml", actions
+            )
+            self.assertNotIn(
+                "uses: ./.github/workflows/deliver-container-image.yml", actions
+            )
+            self.assertNotIn("uses: ../workflows/deploy-aws-app-runner.yml", actions)
+
+    def test_mixed_workflow_with_local_and_github_actions(self):
+        """Test workflow with both local references and GitHub actions"""
+        workflow_content = """
+name: Mixed Workflow
+on: [push]
+
+jobs:
+  local-job:
+    uses: ./.github/workflows/local-workflow.yml
+
+  github-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+"""
+
+        with patch("builtins.open", mock_open(read_data=workflow_content)):
+            actions = extract_actions_from_workflow("workflow.yml")
+            # Should only extract GitHub actions
+            self.assertEqual(len(actions), 2)
+            self.assertIn("uses: actions/checkout@v4", actions)
+            self.assertIn("uses: actions/setup-python@v4", actions)
+
+            # Verify local workflow reference is NOT included
+            self.assertNotIn("uses: ./.github/workflows/local-workflow.yml", actions)
+
+    def test_only_local_workflow_references(self):
+        """Test workflow with only local workflow references"""
+        workflow_content = """
+name: Local Only Workflow
+on: [push]
+
+jobs:
+  integration:
+    uses: ./.github/workflows/integrate-python-app.yml
+    permissions:
+      contents: read
+
+  delivery:
+    uses: ./.github/workflows/deliver-container-image.yml
+    permissions:
+      contents: read
+
+  deploy-staging:
+    uses: ./.github/workflows/deploy-aws-app-runner.yml
+    with:
+      environment: Staging
+    permissions:
+      packages: read
+    secrets: inherit
+
+  deploy-production:
+    uses: ./.github/workflows/deploy-aws-app-runner.yml
+    with:
+      environment: Production
+    permissions:
+      packages: read
+    secrets: inherit
+"""
+
+        with patch("builtins.open", mock_open(read_data=workflow_content)):
+            actions = extract_actions_from_workflow("workflow.yml")
+            # Should return empty list since all are local workflow references
+            self.assertEqual(len(actions), 0)
+
     def test_file_not_found(self):
         """Test workflow file not found"""
         with patch("builtins.open", side_effect=FileNotFoundError("File not found")):
@@ -387,6 +549,20 @@ class TestProcessWorkflow(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertIn("No actions found in workflow file", results[0])
 
+    @patch("main.extract_actions_from_workflow")
+    @patch("main.process_action")
+    def test_workflow_with_only_local_references(self, mock_process, mock_extract):
+        """Test workflow processing when only local workflow references are found"""
+        # Simulate a workflow with only local workflow references
+        mock_extract.return_value = []  # No GitHub actions found
+
+        results = process_workflow("workflow.yml")
+        self.assertEqual(len(results), 1)
+        self.assertIn("No actions found in workflow file", results[0])
+
+        # Verify that process_action was not called since no actions were extracted
+        mock_process.assert_not_called()
+
 
 class TestProcessWorkflowJson(unittest.TestCase):
     """Test the process_workflow_json function"""
@@ -410,6 +586,21 @@ class TestProcessWorkflowJson(unittest.TestCase):
         self.assertEqual(
             results["actions/setup-python@v5"], "actions/setup-python@v5.6.0"
         )
+
+    @patch("main.extract_actions_from_workflow")
+    @patch("main.process_action_for_json")
+    def test_workflow_json_with_only_local_references(self, mock_process, mock_extract):
+        """Test workflow JSON processing when only local workflow references are found"""
+        # Simulate a workflow with only local workflow references
+        mock_extract.return_value = []  # No GitHub actions found
+
+        results = process_workflow_json("workflow.yml")
+        self.assertEqual(len(results), 1)
+        self.assertIn("error", results)
+        self.assertIn("No actions found in workflow file", results["error"])
+
+        # Verify that process_action_for_json was not called since no actions were extracted
+        mock_process.assert_not_called()
 
 
 class TestProcessStdin(unittest.TestCase):

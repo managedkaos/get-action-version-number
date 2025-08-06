@@ -36,6 +36,10 @@ def parse_action_string(action_string: str) -> Tuple[str, Optional[str]]:
     if action_string.startswith("uses:"):
         action_string = action_string[5:].strip()
 
+    # Check for local workflow references
+    if is_local_workflow_reference(action_string):
+        raise ValueError(f"Local workflow reference not supported: {action_string}")
+
     # Pattern to match owner/repo@version or owner/repo
     pattern = r"^([^@]+)(?:@(.+))?$"
     match = re.match(pattern, action_string)
@@ -244,9 +248,25 @@ def process_file_json(file_path: str, github_token: Optional[str] = None) -> dic
     return results
 
 
+def is_local_workflow_reference(action: str) -> bool:
+    """
+    Check if an action string is a local workflow reference.
+
+    Args:
+        action: Action string to check
+
+    Returns:
+        True if it's a local workflow reference, False otherwise
+    """
+    return action.startswith("./") or action.startswith("../")
+
+
 def extract_actions_from_workflow(workflow_file: str) -> List[str]:
     """
     Extract action strings from a GitHub workflow file.
+
+    Note: Local workflow references (those starting with ./ or ../) are filtered out
+    as they cannot be versioned through GitHub releases.
 
     Args:
         workflow_file: Path to the workflow file
@@ -268,8 +288,14 @@ def extract_actions_from_workflow(workflow_file: str) -> List[str]:
         matches = re.findall(pattern, content)
 
         for match in matches:
-            # Clean up the match and add "uses:" prefix back
+            # Clean up the match
             action = match.strip()
+
+            # Skip local workflow references (those starting with ./ or ../)
+            if is_local_workflow_reference(action):
+                continue
+
+            # Skip if empty after stripping
             if action:
                 actions.append(f"uses: {action}")
 
