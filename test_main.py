@@ -302,9 +302,16 @@ docker/build-push-action@v5
 
                 results = process_file("test.txt")
                 self.assertEqual(len(results), 3)
-                self.assertIn("actions/checkout@v4 -> actions/checkout@v4.2.2", results[0])
-                self.assertIn("actions/setup-python@v5 -> actions/setup-python@v5.6.0", results[1])
-                self.assertIn("docker/build-push-action@v5 -> docker/build-push-action@v6.18.0", results[2])
+                self.assertIn(
+                    "actions/checkout@v4 -> actions/checkout@v4.2.2", results[0]
+                )
+                self.assertIn(
+                    "actions/setup-python@v5 -> actions/setup-python@v5.6.0", results[1]
+                )
+                self.assertIn(
+                    "docker/build-push-action@v5 -> docker/build-push-action@v6.18.0",
+                    results[2],
+                )
 
     def test_file_not_found(self):
         """Test file not found handling"""
@@ -538,7 +545,9 @@ class TestProcessWorkflow(unittest.TestCase):
         results = process_workflow("workflow.yml")
         self.assertEqual(len(results), 2)
         self.assertIn("actions/checkout@v4 -> actions/checkout@v4.2.2", results[0])
-        self.assertIn("actions/setup-python@v5 -> actions/setup-python@v5.6.0", results[1])
+        self.assertIn(
+            "actions/setup-python@v5 -> actions/setup-python@v5.6.0", results[1]
+        )
 
     @patch("main.extract_actions_from_workflow")
     def test_no_actions_found(self, mock_extract):

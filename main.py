@@ -377,6 +377,97 @@ def process_workflow_json(
     return results
 
 
+def update_workflow_in_place(
+    workflow_file: str, github_token: Optional[str] = None
+) -> dict:
+    """
+    Update a workflow file in place with the latest action versions.
+
+    Args:
+        workflow_file: Path to the workflow file
+        github_token: Optional GitHub token for authenticated requests
+
+    Returns:
+        Dictionary with update results and statistics
+    """
+    try:
+        # Read the original workflow file
+        with open(workflow_file, "r", encoding="utf-8") as file:
+            content = file.read()
+
+        # Extract actions from the workflow
+        actions = extract_actions_from_workflow(workflow_file)
+
+        if not actions:
+            return {
+                "error": "No actions found in workflow file",
+                "updated": False,
+                "updates_made": 0,
+            }
+
+        # Track updates
+        updates_made = 0
+        update_summary = []
+        updated_content = content
+
+        # Process each action and update the content
+        for action in actions:
+            try:
+                # Remove 'uses:' prefix for processing
+                action_clean = action.replace("uses: ", "").strip()
+                repo, current_version = parse_action_string(action_clean)
+                latest_version = get_latest_release(repo, github_token)
+
+                if latest_version and current_version != latest_version:
+                    # Create the old and new action strings
+                    old_action = f"uses: {repo}@{current_version}"
+                    new_action = f"uses: {repo}@{latest_version}"
+
+                    # Update the content
+                    updated_content = updated_content.replace(old_action, new_action)
+                    updates_made += 1
+                    update_summary.append(
+                        {
+                            "action": repo,
+                            "old_version": current_version,
+                            "new_version": latest_version,
+                        }
+                    )
+
+                    print(f"Updated {repo}: {current_version} -> {latest_version}")
+
+            except ValueError as e:
+                print(f"Error processing action {action}: {e}", file=sys.stderr)
+                continue
+
+        # Write the updated content back to the file
+        if updates_made > 0:
+            with open(workflow_file, "w", encoding="utf-8") as file:
+                file.write(updated_content)
+            print(
+                f"\nWorkflow file updated successfully. {updates_made} action(s) updated."
+            )
+        else:
+            print(
+                "No updates needed - all actions are already at their latest versions."
+            )
+
+        return {
+            "updated": updates_made > 0,
+            "updates_made": updates_made,
+            "update_summary": update_summary,
+        }
+
+    except FileNotFoundError:
+        error_msg = f"Error: Workflow file '{workflow_file}' not found"
+        print(error_msg, file=sys.stderr)
+        return {"error": error_msg, "updated": False, "updates_made": 0}
+    except Exception as e:
+        error_msg = f"Error updating workflow file: {e}"
+        print(error_msg, file=sys.stderr)
+        return {"error": error_msg, "updated": False, "updates_made": 0}
+
+
 def process_stdin(
     github_token: Optional[str] = None, json_output: bool = False
 ) -> None:
@@ -434,6 +525,7 @@ Examples:
   %(prog)s -f actions.txt --json
   %(prog)s -w workflow.yml
   %(prog)s -w workflow.yml --json
+  %(prog)s -w workflow.yml --update-in-place
   %(prog)s -w workflow.yml --token YOUR_GITHUB_TOKEN
   %(prog)s --stdin
   %(prog)s --stdin --json
@@ -470,10 +562,23 @@ Examples:
         "--json", action="store_true", help="Output results in JSON format"
     )
 
+    parser.add_argument(
+        "--update-in-place",
+        action="store_true",
+        help="Update workflow file in place with latest action versions (only works with --workflow)",
+    )
+
     args = parser.parse_args()
 
     # Get GitHub token from environment variable if not provided
     github_token = args.token or os.getenv("GITHUB_TOKEN")
+
+    # Validate that --update-in-place is only used with --workflow
+    if args.update_in_place and not args.workflow:
+        print(
+            "Error: --update-in-place can only be used with --workflow", file=sys.stderr
+        )
+        sys.exit(1)
 
     # Check for piped input first (before checking for no arguments)
     if (
@@ -509,7 +614,16 @@ Examples:
 
     if args.workflow:
         # Process workflow file
-        if args.json:
+        if args.update_in_place:
+            # Update workflow file in place
+            if args.json:
+                print(
+                    "Error: --json and --update-in-place cannot be used together",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            update_workflow_in_place(args.workflow, github_token)
+        elif args.json:
             results = process_workflow_json(args.workflow, github_token)
             print(json.dumps(results, indent=2))
         else:

@@ -8,10 +8,12 @@ A Python-based application that looks up the latest version of GitHub Actions us
 
 - Look up the latest version of a single GitHub Action
 - Process multiple actions from a file
-- **NEW**: Extract and process actions directly from GitHub workflow files
+- Extract and process actions directly from GitHub workflow files
+- Update workflow files in place with latest action versions
 - Support for both authenticated and unauthenticated API requests
 - Handles various action formats (with or without version)
-- **NEW**: JSON output format with `--json` flag
+- JSON output format with `--json` flag
+- Enhanced text output showing both old and new versions
 
 ## Installation
 
@@ -35,7 +37,7 @@ python main.py "actions/checkout@v4"
 Output:
 
 ```bash
-actions/checkout@v4.2.2
+actions/checkout@v4 -> actions/checkout@v5.0.0
 ```
 
 ### Single Action with JSON Output
@@ -65,7 +67,7 @@ python main.py "actions/setup-python"
 Output:
 
 ```bash
-actions/setup-python@v5.6.0
+actions/setup-python -> actions/setup-python@v6.0.0
 ```
 
 ### Process File
@@ -126,6 +128,38 @@ Output:
 }
 ```
 
+### Update Workflow File In Place
+
+Update a workflow file directly with the latest action versions:
+
+```bash
+python main.py -w workflow.yml --update-in-place
+```
+
+This will:
+
+1. Read the workflow file
+2. Check each action's current version against the latest available version
+3. Update the file with newer versions where available
+4. Preserve all other content (comments, formatting, etc.)
+
+Output:
+
+```bash
+Updated actions/checkout: v4 -> v5.0.0
+Updated actions/setup-python: v5 -> v6.0.0
+
+Workflow file updated successfully. 2 action(s) updated.
+```
+
+If no updates are needed:
+
+```bash
+No updates needed - all actions are already at their latest versions.
+```
+
+**Note**: `--update-in-place` can only be used with `--workflow` and cannot be combined with `--json`.
+
 ### Authenticated Requests
 
 For better rate limits and access to private repositories, use a GitHub token:
@@ -146,6 +180,9 @@ python main.py -w workflow.yml --token YOUR_GITHUB_TOKEN
 
 # With workflow file and JSON output
 python main.py -w workflow.yml --json --token YOUR_GITHUB_TOKEN
+
+# Update workflow file in place
+python main.py -w workflow.yml --update-in-place --token YOUR_GITHUB_TOKEN
 ```
 
 ### Interactive Mode
@@ -175,8 +212,8 @@ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py
 Output:
 
 ```bash
-actions/checkout@v4.2.2
-actions/setup-python@v5.6.0
+actions/checkout@v4 -> actions/checkout@v5.0.0
+actions/setup-python -> actions/setup-python@v6.0.0
 ```
 
 With JSON output:
@@ -210,8 +247,8 @@ The script accepts action strings in these formats:
 
 The script outputs results in these formats:
 
-- `owner/repo@latest` (latest version found)
-- `No releases found` (when no releases are found)
+- `original_version -> latest_version` (shows both old and new versions)
+- `original_version -> No releases found` (when no releases are found)
 - `Error: message` (when parsing fails)
 
 ### JSON Output
@@ -243,6 +280,7 @@ When processing a file, the script:
 - `--stdin`: Read action strings from stdin (interactive mode only)
 - `--token`: GitHub token for authenticated requests (optional)
 - `--json`: Output results in JSON format
+- `--update-in-place`: Update workflow file in place with latest action versions (only works with --workflow)
 - `-h, --help`: Show help message
 
 ## Error Handling
@@ -261,11 +299,11 @@ The script handles various error conditions:
 
 ```bash
 $ python main.py "actions/checkout@v4"
-actions/checkout@v4.2.2
+actions/checkout@v4 -> actions/checkout@v5.0.0
 
 $ python main.py "actions/checkout@v4" --json
 {
-  "actions/checkout@v4": "actions/checkout@v4.2.2"
+  "actions/checkout@v4": "actions/checkout@v5.0.0"
 }
 ```
 
@@ -273,14 +311,14 @@ $ python main.py "actions/checkout@v4" --json
 
 ```bash
 $ python main.py -f actions.txt
-actions/checkout@v4.2.2
-actions/setup-python@v5.6.0
-docker/build-push-action@v6.18.0
+actions/checkout@v4 -> actions/checkout@v5.0.0
+actions/setup-python@v5 -> actions/setup-python@v6.0.0
+docker/build-push-action@v5 -> docker/build-push-action@v6.18.0
 
 $ python main.py -f actions.txt --json
 {
-  "actions/checkout@v4": "actions/checkout@v4.2.2",
-  "actions/setup-python@v5": "actions/setup-python@v5.6.0",
+  "actions/checkout@v4": "actions/checkout@v5.0.0",
+  "actions/setup-python@v5": "actions/setup-python@v6.0.0",
   "docker/build-push-action@v5": "docker/build-push-action@v6.18.0"
 }
 ```
@@ -289,47 +327,60 @@ $ python main.py -f actions.txt --json
 
 ```bash
 $ python main.py -w workflow.yml
-actions/checkout@v4.2.2
-actions/setup-go@v5.5.0
+actions/checkout@v4 -> actions/checkout@v5.0.0
+actions/setup-go@v5.5.0 -> actions/setup-go@v6.0.0
 
 $ python main.py -w workflow.yml --json
 {
-  "actions/checkout@v4": "actions/checkout@v4.2.2",
-  "actions/setup-go@v5.5.0": "actions/setup-go@v5.5.0"
+  "actions/checkout@v4": "actions/checkout@v5.0.0",
+  "actions/setup-go@v5.5.0": "actions/setup-go@v6.0.0"
 }
 ```
 
-### Example 4: Interactive Mode
+### Example 4: Update Workflow In Place
+
+```bash
+$ python main.py -w workflow.yml --update-in-place
+Updated actions/checkout: v4 -> v5.0.0
+Updated actions/setup-python: v5 -> v6.0.0
+
+Workflow file updated successfully. 2 action(s) updated.
+
+$ python main.py -w workflow.yml --update-in-place
+No updates needed - all actions are already at their latest versions.
+```
+
+### Example 5: Interactive Mode
 
 ```bash
 $ python main.py --stdin
 Enter action strings (one per line, Ctrl+D to finish):
 actions/checkout@v4
 actions/setup-python
-actions/checkout@v4.2.2
-actions/setup-python@v5.6.0
+actions/checkout@v4 -> actions/checkout@v5.0.0
+actions/setup-python -> actions/setup-python@v6.0.0
 
 $ python main.py --stdin --json
 Enter action strings (one per line, Ctrl+D to finish):
 actions/checkout@v4
 actions/setup-python
 {
-  "actions/checkout@v4": "actions/checkout@v4.2.2",
-  "actions/setup-python": "actions/setup-python@v5.6.0"
+  "actions/checkout@v4": "actions/checkout@v5.0.0",
+  "actions/setup-python": "actions/setup-python@v6.0.0"
 }
 ```
 
-### Example 5: Piping Input
+### Example 6: Piping Input
 
 ```bash
 $ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py
-actions/checkout@v4.2.2
-actions/setup-python@v5.6.0
+actions/checkout@v4 -> actions/checkout@v5.0.0
+actions/setup-python -> actions/setup-python@v6.0.0
 
 $ echo -e "actions/checkout@v4\nactions/setup-python" | python main.py --json
 {
-  "actions/checkout@v4": "actions/checkout@v4.2.2",
-  "actions/setup-python": "actions/setup-python@v5.6.0"
+  "actions/checkout@v4": "actions/checkout@v5.0.0",
+  "actions/setup-python": "actions/setup-python@v6.0.0"
 }
 ```
 
