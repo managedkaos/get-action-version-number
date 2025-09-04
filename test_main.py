@@ -116,7 +116,7 @@ class TestParseActionString(unittest.TestCase):
     def test_invalid_action_returns_no_releases(self):
         """Test that invalid actions return 'No releases found'"""
         result = process_action("invalid-action")
-        self.assertEqual(result, "No releases found")
+        self.assertEqual(result, "invalid-action -> No releases found")
 
     def test_empty_action(self):
         """Test parsing empty action"""
@@ -229,7 +229,7 @@ class TestProcessAction(unittest.TestCase):
         mock_get_latest.return_value = "v4.2.2"
 
         result = process_action("actions/checkout@v4")
-        self.assertEqual(result, "actions/checkout@v4.2.2")
+        self.assertEqual(result, "actions/checkout@v4 -> actions/checkout@v4.2.2")
 
     @patch("main.get_latest_release")
     def test_action_without_version(self, mock_get_latest):
@@ -237,7 +237,7 @@ class TestProcessAction(unittest.TestCase):
         mock_get_latest.return_value = "v5.6.0"
 
         result = process_action("actions/setup-python")
-        self.assertEqual(result, "actions/setup-python@v5.6.0")
+        self.assertEqual(result, "actions/setup-python -> actions/setup-python@v5.6.0")
 
     @patch("main.get_latest_release")
     def test_no_releases_found(self, mock_get_latest):
@@ -245,12 +245,12 @@ class TestProcessAction(unittest.TestCase):
         mock_get_latest.return_value = None
 
         result = process_action("actions/checkout@v4")
-        self.assertEqual(result, "No releases found")
+        self.assertEqual(result, "actions/checkout@v4 -> No releases found")
 
     def test_invalid_action_format(self):
         """Test invalid action format"""
         result = process_action("invalid-action")
-        self.assertEqual(result, "No releases found")
+        self.assertEqual(result, "invalid-action -> No releases found")
 
 
 class TestProcessActionForJson(unittest.TestCase):
@@ -295,16 +295,16 @@ docker/build-push-action@v5
         with patch("builtins.open", mock_open(read_data=file_content)):
             with patch("main.process_action") as mock_process:
                 mock_process.side_effect = [
-                    "actions/checkout@v4.2.2",
-                    "actions/setup-python@v5.6.0",
-                    "docker/build-push-action@v6.18.0",
+                    "actions/checkout@v4 -> actions/checkout@v4.2.2",
+                    "actions/setup-python@v5 -> actions/setup-python@v5.6.0",
+                    "docker/build-push-action@v5 -> docker/build-push-action@v6.18.0",
                 ]
 
                 results = process_file("test.txt")
                 self.assertEqual(len(results), 3)
-                self.assertIn("actions/checkout@v4.2.2", results[0])
-                self.assertIn("actions/setup-python@v5.6.0", results[1])
-                self.assertIn("docker/build-push-action@v6.18.0", results[2])
+                self.assertIn("actions/checkout@v4 -> actions/checkout@v4.2.2", results[0])
+                self.assertIn("actions/setup-python@v5 -> actions/setup-python@v5.6.0", results[1])
+                self.assertIn("docker/build-push-action@v5 -> docker/build-push-action@v6.18.0", results[2])
 
     def test_file_not_found(self):
         """Test file not found handling"""
@@ -531,14 +531,14 @@ class TestProcessWorkflow(unittest.TestCase):
             "uses: actions/setup-python@v5",
         ]
         mock_process.side_effect = [
-            "actions/checkout@v4.2.2",
-            "actions/setup-python@v5.6.0",
+            "actions/checkout@v4 -> actions/checkout@v4.2.2",
+            "actions/setup-python@v5 -> actions/setup-python@v5.6.0",
         ]
 
         results = process_workflow("workflow.yml")
         self.assertEqual(len(results), 2)
-        self.assertIn("actions/checkout@v4.2.2", results[0])
-        self.assertIn("actions/setup-python@v5.6.0", results[1])
+        self.assertIn("actions/checkout@v4 -> actions/checkout@v4.2.2", results[0])
+        self.assertIn("actions/setup-python@v5 -> actions/setup-python@v5.6.0", results[1])
 
     @patch("main.extract_actions_from_workflow")
     def test_no_actions_found(self, mock_extract):
@@ -611,8 +611,8 @@ class TestProcessStdin(unittest.TestCase):
     def test_stdin_processing(self, mock_process):
         """Test stdin processing"""
         mock_process.side_effect = [
-            "actions/checkout@v4.2.2",
-            "actions/setup-python@v5.6.0",
+            "actions/checkout@v4 -> actions/checkout@v4.2.2",
+            "actions/setup-python -> actions/setup-python@v5.6.0",
         ]
 
         with patch("builtins.print") as mock_print:

@@ -23,6 +23,9 @@ help:
 
 all: requirements lint test build test-docker
 
+requirements:
+	pip install --quiet --upgrade --requirement requirements.txt
+
 development-requirements: requirements
 	pip install --quiet --upgrade --requirement development-requirements.txt
 

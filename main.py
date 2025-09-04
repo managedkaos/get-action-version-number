@@ -134,23 +134,30 @@ def get_latest_release(repo: str, github_token: Optional[str] = None) -> Optiona
 
 def process_action(action_string: str, github_token: Optional[str] = None) -> str:
     """
-    Process a single action string and return the latest version.
+    Process a single action string and return both old and new versions.
 
     Args:
         action_string: Action string to process
         github_token: Optional GitHub token for authenticated requests
 
     Returns:
-        Latest version string or error message
+        Formatted string showing old -> new version or error message
     """
     try:
         repo, current_version = parse_action_string(action_string)
         latest_version = get_latest_release(repo, github_token)
 
-        if latest_version:
-            return f"{repo}@{latest_version}"
+        # Reconstruct the original action string
+        original_action = action_string.strip()
+        if current_version:
+            original_action = f"{repo}@{current_version}"
         else:
-            return "No releases found"
+            original_action = repo
+
+        if latest_version:
+            return f"{original_action} -> {repo}@{latest_version}"
+        else:
+            return f"{original_action} -> No releases found"
 
     except ValueError as e:
         return f"Error: {e}"
@@ -208,12 +215,16 @@ def process_file(file_path: str, github_token: Optional[str] = None) -> List[str
                 line = line.strip()
                 if line and not line.startswith("#"):  # Skip empty lines and comments
                     result = process_action(line, github_token)
-                    print(f"{result}")
-                    results.append(f"{result}")
+                    print(result)
+                    results.append(result)
     except FileNotFoundError:
-        results.append(f"Error: File '{file_path}' not found")
+        error_msg = f"Error: File '{file_path}' not found"
+        results.append(error_msg)
+        print(error_msg)
     except Exception as e:
-        results.append(f"Error reading file: {e}")
+        error_msg = f"Error reading file: {e}"
+        results.append(error_msg)
+        print(error_msg)
 
     return results
 
@@ -326,11 +337,14 @@ def process_workflow(
     results = []
 
     if not actions:
-        results.append("No actions found in workflow file")
+        error_msg = "No actions found in workflow file"
+        results.append(error_msg)
+        print(error_msg)
         return results
 
     for action in actions:
         result = process_action(action, github_token)
+        print(result)
         results.append(result)
 
     return results
@@ -499,16 +513,14 @@ Examples:
             results = process_workflow_json(args.workflow, github_token)
             print(json.dumps(results, indent=2))
         else:
-            results = process_workflow(args.workflow, github_token)
-            for result in results:
-                print(result)
+            process_workflow(args.workflow, github_token)
     elif args.file:
         # Process file
         if args.json:
             results = process_file_json(args.file, github_token)
             print(json.dumps(results, indent=2))
         else:
-            results = process_file(args.file, github_token)
+            process_file(args.file, github_token)
     elif args.stdin:
         # Process stdin (interactive mode)
         process_stdin(github_token, args.json)
